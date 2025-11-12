@@ -1,540 +1,501 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>برنامج الملاحة المتطور</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>برنامج الملاحة للرحلات — نسخة محسّنة تعمل</title>
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+  <!-- Omnivore (KML/GPX) -->
+  <script src="https://unpkg.com/leaflet-omnivore@0.3.1/leaflet-omnivore.min.js"></script>
+  <style>
+    :root {
+      --card-bg: rgba(255, 255, 255, 0.98);
+      --card-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+      --primary: #3498db;
+      --primary-hover: #2980b9;
+      --text: #2c3e50;
+      --muted: #6b7280;
+    }
 
-        body {
-            font-family: 'Cairo', sans-serif;
-            margin: 0;
-            padding: 0;
-            overflow: hidden;
-            background-color: #f4f7f6;
-            color: #333;
-        }
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      color: var(--text);
+      background: #f8fafc;
+    }
+    #map { width: 100vw; height: 100vh; }
 
-        #map {
-            width: 100vw;
-            height: 100vh;
-            position: absolute;
-            top: 0;
-            left: 0;
-            z-index: 1;
-        }
+    .controls {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      z-index: 1000;
+      background: var(--card-bg);
+      padding: 14px;
+      border-radius: 12px;
+      box-shadow: var(--card-shadow);
+      width: 320px;
+      max-height: 92vh;
+      overflow-y: auto;
+      backdrop-filter: saturate(1.2) blur(2px);
+    }
+    .controls h3 { margin: 0 0 8px; font-size: 16px; font-weight: 700; }
+    .row { margin-bottom: 10px; }
+    label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+    select, input[type="text"], input[type="file"], button { width: 100%; }
+    select, input, button {
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid #e5e7eb;
+      font: inherit;
+      background: #fff;
+    }
+    input[type="range"] { padding: 0; }
 
-        .controls-container {
-            position: absolute;
-            top: 15px;
-            left: 15px;
-            z-index: 1000;
-            background: rgba(255, 255, 255, 0.98);
-            padding: 20px;
-            border-radius: 12px;
-            box-shadow: 0 5px 25px rgba(0, 0, 0, 0.15);
-            width: 320px;
-            max-height: calc(100vh - 30px);
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            transition: all 0.3s ease-in-out;
-            transform: translateX(0);
-        }
-        
-        /* حالة القائمة المصغرة */
-        .controls-container.collapsed {
-            width: 60px; /* عرض أصغر للقائمة المصغرة */
-            padding: 10px;
-            overflow: hidden; /* إخفاء المحتوى الزائد */
-            pointer-events: none; /* تعطيل التفاعل مع العناصر المخفية */
-        }
+    button.primary {
+      background-color: var(--primary);
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    button.primary:hover { background-color: var(--primary-hover); }
+    button.ghost { background: #fff; border: 1px solid #e5e7eb; }
 
-        .controls-container.collapsed .controls-group,
-        .controls-container.collapsed h3,
-        .controls-container.collapsed button:not(#toggle-controls-btn),
-        .controls-container.collapsed label,
-        .controls-container.collapsed select,
-        .controls-container.collapsed input:not(#geojson-upload) { /* استثنى input file */
-            display: none; /* إخفاء كل المحتوى باستثناء زر التصغير */
-        }
-        .controls-container.collapsed #geojson-upload {
-             display: none; /* إخفاء زر رفع الملفات أيضاً */
-        }
+    .stack { display: grid; gap: 10px; }
+    .inline { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
+    .hint { font-size: 12px; color: var(--muted); }
 
+    .info { margin-top: 8px; font-size: 14px; color: var(--text); }
+    .divider { height: 1px; background: #e5e7eb; margin: 8px 0; }
 
-        @media (max-width: 768px) {
-            .controls-container {
-                width: calc(100% - 30px);
-                left: 15px;
-                right: 15px;
-                top: 15px;
-                max-height: calc(100vh - 30px);
-                transform: translateX(calc(100% + 30px)); /* Hidden by default on mobile */
-            }
-            .controls-container.active {
-                transform: translateX(0);
-            }
-            .menu-toggle {
-                display: block;
-            }
-        }
+    .toast {
+      position: absolute; inset-inline-start: 50%; top: 12px; transform: translateX(-50%);
+      background: #111827; color:#fff; padding: 10px 14px; border-radius: 999px; font-size: 13px;
+      box-shadow: 0 8px 30px rgba(0,0,0,.2); opacity: 0; pointer-events: none; transition: opacity .25s ease;
+      z-index: 1200;
+    }
+    .toast.show { opacity: 1; }
 
-        .controls-group {
-            border-bottom: 1px solid #eee;
-            padding-bottom: 15px;
-            margin-bottom: 15px;
-        }
-        .controls-group:last-child {
-            border-bottom: none;
-            margin-bottom: 0;
-            padding-bottom: 0;
-        }
-
-        label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: #555;
-            font-size: 0.95em;
-        }
-
-        select, input[type="text"], input[type="file"], input[type="range"], button {
-            width: 100%;
-            padding: 10px 12px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            font-family: 'Cairo', sans-serif;
-            font-size: 0.9em;
-            box-sizing: border-box;
-            transition: all 0.2s ease;
-        }
-
-        select:focus, input[type="text"]:focus, input[type="range"]:focus, button:focus {
-            border-color: #3498db;
-            box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
-            outline: none;
-        }
-
-        input[type="range"] {
-            padding: 0;
-            height: 25px;
-            -webkit-appearance: none;
-            background: #eee;
-            outline: none;
-        }
-        input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
-            background: #3498db;
-            cursor: pointer;
-            box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
-        }
-        input[type="range"]::-moz-range-thumb {
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
-            background: #3498db;
-            cursor: pointer;
-            box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
-        }
-
-        .range-value {
-            display: inline-block;
-            min-width: 30px;
-            text-align: center;
-            font-weight: 600;
-            color: #3498db;
-            margin-top: 5px;
-        }
-
-        button {
-            background-color: #3498db;
-            color: white;
-            border: none;
-            padding: 12px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            font-weight: 600;
-            transition: background-color 0.2s ease, transform 0.1s ease;
-        }
-        button:hover {
-            background-color: #2980b9;
-            transform: translateY(-1px);
-        }
-        button:active {
-            transform: translateY(0);
-        }
-
-        .info-box {
-            background-color: #e8f6fc;
-            border: 1px solid #b3e0f2;
-            padding: 12px;
-            border-radius: 8px;
-            margin-top: 10px;
-            font-size: 0.9em;
-            color: #2c3e50;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .info-box i {
-            color: #3498db;
-            font-size: 1.2em;
-        }
-
-        #coordinates-output {
-            background-color: #f8f8f8;
-            border: 1px solid #eee;
-            padding: 8px;
-            border-radius: 6px;
-            font-size: 0.85em;
-            color: #555;
-            word-break: break-all;
-        }
-
-        .menu-toggle {
-            position: absolute;
-            top: 15px;
-            left: 15px;
-            z-index: 1001;
-            background-color: #3498db;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            padding: 10px 15px;
-            cursor: pointer;
-            font-size: 1.2em;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-            display: none; /* Hidden by default, shown on mobile */
-        }
-        .menu-toggle:hover {
-            background-color: #2980b9;
-        }
-
-        /* زر التصغير والتكبير داخل لوحة التحكم */
-        #toggle-controls-btn {
-            position: absolute;
-            top: 10px;
-            right: 10px; /* على اليمين ليكون ظاهرًا حتى لو كانت القائمة مصغرة */
-            width: 40px;
-            height: 40px;
-            padding: 0;
-            border-radius: 50%; /* دائري */
-            background-color: #6c757d; /* لون مختلف للزر */
-            font-size: 1.2em;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-            z-index: 1001; /* فوق العناصر الأخرى */
-        }
-        #toggle-controls-btn:hover {
-            background-color: #5a6268;
-        }
-        /* إخفاء زر التصغير على الجوال لأن لدينا زر menu-toggle */
-        @media (max-width: 768px) {
-            #toggle-controls-btn {
-                display: none;
-            }
-        }
-    </style>
+    @media (max-width: 640px){ .controls { width: calc(100vw - 24px); left: 12px; right: 12px; } }
+  </style>
 </head>
 <body>
-    <div id="map"></div>
+  <div id="map"></div>
 
-    <button class="menu-toggle" id="menu-toggle"><i class="fas fa-bars"></i></button>
+  <div class="controls" role="region" aria-label="لوحة التحكم">
+    <div class="stack">
+      <h3>إعدادات الخريطة</h3>
 
-    <div class="controls-container" id="controls-container">
-        <button id="toggle-controls-btn" title="تصغير/تكبير القائمة"><i class="fas fa-chevron-left"></i></button>
-        <h3 style="text-align: center; color: #2c3e50; margin-top: 0;">برنامج الملاحة المتطور</h3>
+      <div class="row">
+        <label for="satellite-source">اختيار مصدر الصور (صور جوية):</label>
+        <select id="satellite-source" aria-label="مصدر صور الأقمار">
+          <option value="none" selected>بدون صور جوية (OSM فقط)</option>
+          <option value="esri">Esri World Imagery</option>
+          <option value="imagerie">ArcGIS Imagerie</option>
+        </select>
+        <div class="hint">يمكنك التبديل فورًا بين طبقات الصور دون التأثير على بقية العناصر.</div>
+      </div>
 
-        <div class="controls-group">
-            <label for="base-map-source">اختيار خريطة الأساس:</label>
-            <select id="base-map-source">
-                <option value="osm">خريطة الشارع المفتوح</option>
-                <option value="google-sat">Google Satellite</option>
-                <option value="esri-sat">Esri World Imagery</option>
-                <option value="topo">Topo Map</option>
-            </select>
+      <div class="row">
+        <label for="satellite-opacity">شفافية صور الأقمار الصناعية: <span id="satellite-opacity-value">1</span></label>
+        <input type="range" id="satellite-opacity" min="0" max="1" step="0.1" value="1" />
+      </div>
+
+      <div class="row">
+        <label for="street-opacity">شفافية خريطة الشارع المفتوح: <span id="street-opacity-value">1</span></label>
+        <input type="range" id="street-opacity" min="0" max="1" step="0.1" value="1" />
+      </div>
+
+      <div class="row inline">
+        <button id="locate" class="ghost" title="الذهاب إلى موقعي الحالي">موقعي الحالي</button>
+        <button id="fullscreen" class="ghost" title="عرض بملء الشاشة">ملء الشاشة</button>
+        <button id="clear" class="primary" title="مسح العلامات والمسارات">مسح</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="row">
+        <label for="search">بحث عن موقع (اسم مدينة/مكان):</label>
+        <div class="inline">
+          <input type="text" id="search" placeholder="مثال: الرياض" />
+          <button id="search-btn" class="ghost" title="بحث">بحث</button>
         </div>
+        <ul id="search-results" class="hint" style="list-style:none; padding:6px 0; margin:0; display:grid; gap:6px;"></ul>
+      </div>
 
-        <div class="controls-group">
-            <label for="geojson-upload">رفع ملف مسار (GeoJSON, KML, GPX):</label>
-            <input type="file" id="geojson-upload" accept=".geojson,.kml,.gpx" />
-            <button id="clear-map-layers"><i class="fas fa-eraser"></i> مسح جميع الطبقات</button>
-        </div>
-        
-        <div class="controls-group">
-            <label>الإحداثيات المحددة (DMS):</label>
-            <div id="coordinates-output" style="margin-bottom: 10px;">انقر على الخريطة لتحديد الإحداثيات</div>
-            <button id="copy-coordinates"><i class="fas fa-copy"></i> نسخ الإحداثيات</button>
-        </div>
+      <div class="divider"></div>
 
-        <div class="controls-group">
-            <label>حساب المسافة بين نقطتين:</label>
-            <button id="start-distance-measure"><i class="fas fa-ruler-horizontal"></i> ابدأ قياس المسافة</button>
-            <div class="info-box" id="distance-info"><i class="fas fa-info-circle"></i> المسافة: --</div>
-        </div>
+      <div class="row">
+        <label for="geojson-upload">تحميل مسار (GeoJSON / KML / GPX):</label>
+        <input type="file" id="geojson-upload" accept=".geojson,.kml,.gpx" />
+      </div>
 
-        <div class="controls-group">
-            <label>التوجيه وحساب المسار:</label>
-            <button id="add-route-point"><i class="fas fa-map-marker-alt"></i> إضافة نقطة مسار</button>
-            <button id="get-route" style="background-color: #27ae60;"><i class="fas fa-road"></i> احصل على المسار</button>
-            <div class="info-box" id="route-info"><i class="fas fa-route"></i> المسار: --</div>
-            <p style="font-size: 0.8em; color: #777;">*انقر على "إضافة نقطة مسار" ثم انقر على الخريطة لتحديد النقاط. تحتاج على الأقل نقطتين.</p>
+      <div class="row">
+        <label>الإحداثيات المحددة:</label>
+        <div class="inline">
+          <input type="text" id="coordinates" readonly placeholder="انقر على الخريطة" />
+          <button id="copy-coordinates" class="ghost" title="نسخ الإحداثيات">نسخ</button>
         </div>
+        <div class="hint" id="decimal-coords">—</div>
+      </div>
 
-        <div class="controls-group">
-            <label>حالة الطقس للموقع الأخير:</label>
-            <div class="info-box" id="weather-info"><i class="fas fa-cloud-sun"></i> الطقس: غير متوفرة</div>
-        </div>
-
-        <button id="locate-me"><i class="fas fa-location-arrow"></i> تحديد موقعي الحالي</button>
+      <div class="row info" id="distance-info">المسافة بين العلامتين: غير محددة</div>
+      <div class="row info" id="weather-info">حالة الطقس: غير متوفرة</div>
+      <div class="row info" id="traffic-info">حالة المرور: غير متوفرة</div>
     </div>
+  </div>
 
-    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/leaflet-omnivore@0.3.1/leaflet-omnivore.min.js"></script>
-    <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
-    <script>
-        // مفاتيح API (استبدلها بمفاتيحك الحقيقية)
-        const OPENWEATHERMAP_API_KEY = 'YOUR_OPENWEATHERMAP_API_KEY'; 
-        const OPENROUTESERVICE_API_KEY = 'YOUR_OPENROUTESERVICE_API_KEY'; 
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-        var map = L.map('map').setView([23.8859, 45.0792], 6); // إحداثيات المملكة العربية السعودية
+  <script>
+    // ============ الخريطة و الطبقات الأساسية ============
+    const map = L.map('map', { zoomControl: true }).setView([23.8859, 45.0792], 6);
 
-        // تعريف طبقات الخرائط الأساسية
-        var osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        });
+    const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
 
-        var googleSatLayer = L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
-            subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
-            attribution: '&copy; <a href="https://www.google.com/earth/">Google Earth</a>'
-        });
+    // طبقات صور جوية متعددة (نستخدم واحدة فعّالة في كل وقت)
+    const esriImagery = L.tileLayer(
+      'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      { attribution: '&copy; Esri, USGS, NASA', opacity: 0, maxZoom: 19 }
+    );
 
-        var esriSatLayer = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-            attribution: '&copy; <a href="https://www.esri.com/">Esri</a>, <a href="https://www.usgs.gov/">USGS</a>, <a href="https://www.nasa.gov/">NASA</a>',
-            maxZoom: 19
-        });
+    const arcgisImagery = L.tileLayer(
+      'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      { attribution: '&copy; Esri, USGS, NASA', opacity: 0, maxZoom: 19 }
+    );
 
-        var topoLayer = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
-            attribution: 'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)'
-        });
+    const imageryLayers = { none: null, esri: esriImagery, imagerie: arcgisImagery };
+    let activeImageryKey = 'none';
 
-        // إضافة طبقة OSM كطبقة افتراضية
-        osmLayer.addTo(map);
+    // عناصر مساعدة
+    const uploadsGroup = L.featureGroup().addTo(map); // للمسارات المرفوعة
+    const markersGroup = L.featureGroup().addTo(map); // للعلامات والمسافات
+    let distanceLine = null;
 
-        // وظيفة لتغيير طبقة الخريطة الأساسية
-        document.getElementById('base-map-source').addEventListener('change', function(event) {
-            var selectedSource = event.target.value;
+    // مقياس
+    L.control.scale({ metric: true, imperial: false, position: 'bottomleft' }).addTo(map);
 
-            // إزالة جميع طبقات الأساس
-            map.eachLayer(function(layer) {
-                if (layer !== currentGeojsonLayer && layer !== routeLayer && !distanceMarkers.includes(layer) && !routeMarkers.includes(layer) && layer !== userLocationMarker) {
-                    map.removeLayer(layer);
-                }
-            });
+    // ============ أدوات الواجهة ============
+    const $ = (id) => document.getElementById(id);
+    const satelliteSelect = $('satellite-source');
+    const satelliteRange = $('satellite-opacity');
+    const satelliteValue = $('satellite-opacity-value');
+    const streetRange = $('street-opacity');
+    const streetValue = $('street-opacity-value');
+    const coordsInput = $('coordinates');
+    const decimalCoords = $('decimal-coords');
+    const distanceInfo = $('distance-info');
+    const weatherInfo = $('weather-info');
+    const trafficInfo = $('traffic-info');
+    const toast = $('toast');
+    const fullscreenBtn = $('fullscreen');
+    const searchInput = $('search');
+    const searchBtn = $('search-btn');
+    const searchResults = $('search-results');
 
-            if (selectedSource === 'osm') {
-                osmLayer.addTo(map);
-            } else if (selectedSource === 'google-sat') {
-                googleSatLayer.addTo(map);
-            } else if (selectedSource === 'esri-sat') {
-                esriSatLayer.addTo(map);
-            } else if (selectedSource === 'topo') {
-                topoLayer.addTo(map);
-            }
-        });
+    // قيم العرض الأولية للنصوص
+    satelliteValue.textContent = satelliteRange.value;
+    streetValue.textContent = streetRange.value;
 
-        // إضافة Geocoder (بحث عن الأماكن)
-        L.Control.geocoder({
-            defaultMarkGeocoded: false
-        }).addTo(map)
-        .on('markgeocode', function(e) {
-            var bbox = e.geocode.bbox;
-            var poly = L.polygon([
-                bbox.getSouthEast(),
-                bbox.getNorthEast(),
-                bbox.getNorthWest(),
-                bbox.getSouthWest()
-            ]).addTo(map);
-            map.fitBounds(poly.getBounds());
-            // يمكن إضافة marker أو معلومات إضافية للموقع المبحث عنه
-        });
+    function showToast(msg) {
+      toast.textContent = msg; toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 1800);
+    }
 
-        var currentGeojsonLayer;
-        var distanceMarkers = [];
-        var routeMarkers = [];
-        var routeLayer;
-        var userLocationMarker;
+    // زر ملء الشاشة
+    if (fullscreenBtn) {
+      fullscreenBtn.addEventListener('click', () => {
+        const el = document.documentElement;
+        if (!document.fullscreenElement) { el.requestFullscreen?.(); }
+        else { document.exitFullscreen?.(); }
+      });
+    }
 
-        // تحميل ملفات GeoJSON/KML/GPX
-        document.getElementById('geojson-upload').addEventListener('change', function(e) {
-            var file = e.target.files[0];
-            if (!file) return;
+    // تغيير طبقة الصور دون إزالة بقية الطبقات
+    satelliteSelect.addEventListener('change', (e) => {
+      const key = e.target.value;
+      if (key === activeImageryKey) return;
+      // أخفِ القديمة إن وُجدت
+      if (imageryLayers[activeImageryKey]) {
+        imageryLayers[activeImageryKey].setOpacity(0);
+        imageryLayers[activeImageryKey].remove();
+      }
+      // أظهر الجديدة إن لم تكن none
+      if (imageryLayers[key]) {
+        const v = parseFloat(satelliteRange.value);
+        imageryLayers[key].setOpacity(isNaN(v) ? 1 : v);
+        imageryLayers[key].addTo(map);
+      }
+      activeImageryKey = key;
+      updateHashDebounced();
+    });
 
-            var reader = new FileReader();
-            reader.onload = function(event) {
-                var data = event.target.result;
-                var extension = file.name.split('.').pop().toLowerCase();
+    // التحكم في الشفافية
+    satelliteRange.addEventListener('input', (e) => {
+      const v = parseFloat(e.target.value);
+      satelliteValue.textContent = v;
+      if (imageryLayers[activeImageryKey]) imageryLayers[activeImageryKey].setOpacity(v);
+    });
+    streetRange.addEventListener('input', (e) => {
+      const v = parseFloat(e.target.value);
+      streetValue.textContent = v;
+      streetLayer.setOpacity(v);
+    });
 
-                // إزالة الطبقة السابقة إذا وجدت
-                if (currentGeojsonLayer) {
-                    map.removeLayer(currentGeojsonLayer);
-                }
+    // نسخ الإحداثيات
+    $('copy-coordinates').addEventListener('click', async () => {
+      if (!coordsInput.value) return;
+      try { await navigator.clipboard.writeText(coordsInput.value); showToast('تم نسخ الإحداثيات'); }
+      catch { showToast('تعذّر النسخ'); }
+    });
 
-                if (extension === 'geojson') {
-                    currentGeojsonLayer = L.geoJSON(JSON.parse(data)).addTo(map);
-                    map.fitBounds(currentGeojsonLayer.getBounds());
-                } else if (extension === 'kml' || extension === 'gpx') {
-                    if (extension === 'kml') {
-                        currentGeojsonLayer = omnivore.kml.parse(data).addTo(map);
-                    } else if (extension === 'gpx') {
-                        currentGeojsonLayer = omnivore.gpx.parse(data).addTo(map);
-                    }
-                    map.fitBounds(currentGeojsonLayer.getBounds());
-                } else {
-                    alert('الصيغة غير مدعومة. يرجى رفع ملفات GeoJSON أو KML أو GPX.');
-                }
-            };
-            reader.readAsText(file);
-        });
+    // موقعي الحالي
+    $('locate').addEventListener('click', () => {
+      if (!navigator.geolocation) { showToast('المتصفح لا يدعم تحديد الموقع'); return; }
+      navigator.geolocation.getCurrentPosition((pos) => {
+        const { latitude: lat, longitude: lng } = pos.coords;
+        map.flyTo([lat, lng], 14);
+        const me = L.circleMarker([lat, lng], { radius: 8, color: '#2563eb' }).addTo(markersGroup);
+        me.bindTooltip('موقعي الحالي', { permanent: false });
+        updateWeather(lat, lng);
+      }, () => showToast('تعذّر تحديد الموقع'));
+    });
 
-        // مسح جميع الطبقات (باستثناء طبقة الأساس)
-        document.getElementById('clear-map-layers').addEventListener('click', function() {
-            if (currentGeojsonLayer) {
-                map.removeLayer(currentGeojsonLayer);
-                currentGeojsonLayer = null;
-            }
-            distanceMarkers.forEach(marker => map.removeLayer(marker));
-            distanceMarkers = [];
-            routeMarkers.forEach(marker => map.removeLayer(marker));
-            routeMarkers = [];
-            if (routeLayer) {
-                map.removeLayer(routeLayer);
-                routeLayer = null;
-            }
-            if (userLocationMarker) {
-                map.removeLayer(userLocationMarker);
-                userLocationMarker = null;
-            }
-            document.getElementById('distance-info').innerHTML = '<i class="fas fa-info-circle"></i> المسافة: --';
-            document.getElementById('route-info').innerHTML = '<i class="fas fa-route"></i> المسار: --';
-            document.getElementById('coordinates-output').textContent = 'انقر على الخريطة لتحديد الإحداثيات';
-            document.getElementById('weather-info').innerHTML = '<i class="fas fa-cloud-sun"></i> الطقس: غير متوفرة';
-            alert('تم مسح جميع الطبقات المضافة بنجاح.');
-        });
+    // مسح كل شيء (علامات + خط المسافة + مسارات مرفوعة)
+    $('clear').addEventListener('click', () => {
+      markersGroup.clearLayers();
+      uploadsGroup.clearLayers();
+      distanceLine = null;
+      distanceInfo.textContent = 'المسافة بين العلامتين: غير محددة';
+      coordsInput.value = '';
+      decimalCoords.textContent = '—';
+      updateHashDebounced();
+    });
 
-
-        // عرض الإحداثيات عند النقر على الخريطة
-        map.on('click', function(e) {
-            var lat = e.latlng.lat;
-            var lng = e.latlng.lng;
-
-            function toDMS(degrees, isLatitude) {
-                var direction = isLatitude ? (degrees >= 0 ? "N" : "S") : (degrees >= 0 ? "E" : "W");
-                var absoluteDegrees = Math.abs(degrees);
-                var d = Math.floor(absoluteDegrees);
-                var m = Math.floor((absoluteDegrees - d) * 60);
-                var s = ((absoluteDegrees - d - m / 60) * 3600).toFixed(1);
-                return `${d}°${m}'${s}"${direction}`;
-            }
-
-            var latDMS = toDMS(lat, true);
-            var lngDMS = toDMS(lng, false);
-
-            document.getElementById('coordinates-output').textContent = `${latDMS} ${lngDMS}`;
-            showWeather(lat, lng); // تحديث معلومات الطقس للموقع الأخير
-        });
-
-        // نسخ الإحداثيات
-        document.getElementById('copy-coordinates').addEventListener('click', function() {
-            var coordinatesText = document.getElementById('coordinates-output').textContent;
-            if (coordinatesText && coordinatesText !== 'انقر على الخريطة لتحديد الإحداثيات') {
-                navigator.clipboard.writeText(coordinatesText).then(function() {
-                    alert('تم نسخ الإحداثيات!');
-                }, function(err) {
-                    alert('فشل في نسخ الإحداثيات: ' + err);
-                });
-            } else {
-                alert('لا توجد إحداثيات لنسخها بعد. انقر على الخريطة أولاً.');
-            }
-        });
-
-        // قياس المسافة بين نقطتين
-        var measuringDistance = false;
-        document.getElementById('start-distance-measure').addEventListener('click', function() {
-            if (distanceMarkers.length > 0) { // مسح القياسات السابقة
-                distanceMarkers.forEach(marker => map.removeLayer(marker));
-                distanceMarkers = [];
-                document.getElementById('distance-info').innerHTML = '<i class="fas fa-info-circle"></i> المسافة: --';
-            }
-            measuringDistance = true;
-            alert('انقر على نقطتين على الخريطة لقياس المسافة بينهما.');
-        });
-
-        map.on('click', function(e) {
-            if (measuringDistance) {
-                var marker = L.marker(e.latlng, { draggable: true }).addTo(map);
-                distanceMarkers.push(marker);
-
-                marker.on('dragend', updateDistance);
-
-                if (distanceMarkers.length === 2) {
-                    measuringDistance = false;
-                    updateDistance();
-                }
-            }
-        });
-
-        function updateDistance() {
-            if (distanceMarkers.length === 2) {
-                var latlng1 = distanceMarkers[0].getLatLng();
-                var latlng2 = distanceMarkers[1].getLatLng();
-                var distance = latlng1.distanceTo(latlng2);
-                document.getElementById('distance-info').innerHTML = `<i class="fas fa-info-circle"></i> المسافة: ${(distance / 1000).toFixed(2)} كم (${distance.toFixed(0)} متر)`;
-            }
+    // ============ التحميل (GeoJSON/KML/GPX) ============
+    $('geojson-upload').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const data = event.target.result;
+        const ext = file.name.split('.').pop().toLowerCase();
+        let layer = null;
+        try {
+          if (ext === 'geojson' || ext === 'json') {
+            layer = L.geoJSON(JSON.parse(data));
+          } else if (ext === 'kml') {
+            layer = omnivore.kml.parse(data);
+          } else if (ext === 'gpx') {
+            layer = omnivore.gpx.parse(data);
+          } else {
+            alert('الصيغة غير مدعومة');
+            return;
+          }
+          uploadsGroup.addLayer(layer);
+          map.fitBounds(layer.getBounds(), { padding: [24, 24] });
+          showToast('تم تحميل المسار');
+          updateHashDebounced();
+        } catch (err) {
+          console.error(err);
+          alert('حدث خطأ أثناء قراءة الملف');
         }
+      };
+      reader.readAsText(file);
+      // إعادة تعيين نفس الملف لاحقًا
+      e.target.value = '';
+    });
 
-        // عرض حالة الطقس
-        function showWeather(lat, lng) {
-            if (OPENWEATHERMAP_API_KEY === 'YOUR_OPENWEATHERMAP_API_KEY') {
-                document.getElementById('weather-info').innerHTML = '<i class="fas fa-exclamation-triangle"></i> الرجاء إضافة مفتاح OpenWeatherMap API.';
-                return;
-            }
-            const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&appid=${OPENWEATHERMAP_API_KEY}&units=metric&lang=ar`;
+    // ============ أدوات القياس و الإحداثيات ============
+    const markers = [];
 
-            fetch(url)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    const weatherDescription = data.weather[0].description;
-                    const temp = data.main.temp.toFixed(1);
-                    const feelsLike = data.main.feels_like.toFixed(1);
-                    const humidity = data.main.humidity;
-                    const windSpeed = (data.wind.speed * 3.6).toFixed(1); // m/s to km/h
+    function toDMS(degrees, isLat) {
+      const dir = isLat ? (degrees >= 0 ? 'N' : 'S') : (degrees >= 0 ? 'E' : 'W');
+      const abs = Math.abs(degrees);
+      const d = Math.floor(abs);
+      const mFloat = (abs - d) * 60;
+      const m = Math.floor(mFloat);
+      const s = ((mFloat - m) * 60).toFixed(1);
+      return `${d}°${m}'${s}"${dir}`;
+    }
 
-                    document.getElementById('weather-info').innerHTML = `
-                        <i class="fas fa-cloud-sun"></i> 
-                        الطقس: ${weatherDescription}،
-                        الحرارة: ${temp}°C (تبدو: ${feelsLike}°C)،
-                        الرطوبة: ${humidity}%،
-                        الرياح: ${windSpeed} كم/ساعة
-                    `;
-                })
-                .catch(error => {
-                    console.error("Error fetching weather data:", error);
-                    document.getElementById('weather-info
+    function updateWeather(lat, lng) {
+      const apiKey = '92fc4c00bd8068695e51cee6b0f412c8'; // مفتاح OpenWeatherMap الذي زوّدتني به
+      if (!apiKey || apiKey === 'API_KEY') { weatherInfo.textContent = 'حالة الطقس: (أضف مفتاح API)'; return; }
+      const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&appid=${apiKey}&units=metric&lang=ar`;
+      fetch(url).then(r => r.json()).then(data => {
+        if (!data || !data.weather) { weatherInfo.textContent = 'حالة الطقس: غير متوفرة'; return; }
+        const w = data.weather[0].description; const t = data.main.temp; const ws = data.wind?.speed;
+        weatherInfo.textContent = `حالة الطقس: ${w}، ${t.toFixed(0)}°C${ws ? `، رياح ${ws} م/ث` : ''}`;
+      }).catch(() => weatherInfo.textContent = 'حالة الطقس: غير متوفرة');
+    }
+
+    function formatDistance(meters) {
+      if (meters < 1000) return `${meters.toFixed(0)} م`;
+      return `${(meters / 1000).toFixed(2)} كم`;
+    }
+
+    function bearing(from, to) {
+      const toRad = (d) => d * Math.PI / 180;
+      const toDeg = (r) => r * 180 / Math.PI;
+      const lat1 = toRad(from.lat), lat2 = toRad(to.lat);
+      const dLon = toRad(to.lng - from.lng);
+      const y = Math.sin(dLon) * Math.cos(lat2);
+      const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+      const brng = (toDeg(Math.atan2(y, x)) + 360) % 360;
+      return brng; // درجات
+    }
+
+    map.on('click', (e) => {
+      const { lat, lng } = e.latlng;
+      const latDMS = toDMS(lat, true); const lngDMS = toDMS(lng, false);
+      coordsInput.value = `${latDMS} ${lngDMS}`;
+      decimalCoords.textContent = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+
+      if (markers.length === 2) {
+        markers.forEach(m => markersGroup.removeLayer(m));
+        markers.length = 0;
+        if (distanceLine) { markersGroup.removeLayer(distanceLine); distanceLine = null; }
+        distanceInfo.textContent = 'المسافة بين العلامتين: غير محددة';
+      }
+      const marker = L.marker([lat, lng], { draggable: true }).addTo(markersGroup);
+      markers.push(marker);
+
+      marker.on('drag', () => { if (markers.length === 2) { computeDistance(); } });
+      marker.on('dragend', updateHashDebounced);
+
+      if (markers.length === 2) { computeDistance(); }
+
+      updateWeather(lat, lng);
+      updateHashDebounced();
+    });
+
+    function computeDistance(){
+      const a = markers[0].getLatLng();
+      const b = markers[1].getLatLng();
+      const d = a.distanceTo(b);
+      if (distanceLine) markersGroup.removeLayer(distanceLine);
+      distanceLine = L.polyline([a, b], { weight: 3 }).addTo(markersGroup);
+      const br = bearing(a, b).toFixed(0);
+      distanceInfo.textContent = `المسافة بين العلامتين: ${formatDistance(d)} — الاتجاه: ${br}°`;
+      updateHashDebounced();
+    }
+
+    // ============ حالة المرور (Placeholder) ============
+    trafficInfo.textContent = 'حالة المرور: تتطلب طبقة طرف ثالث (مثل خرائط جوجل/هير).';
+
+    // ============ Geocoder بسيط باستخدام Nominatim ============
+    async function geocode(q){
+      if(!q) return [];
+      const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&accept-language=ar&q=${encodeURIComponent(q)}`;
+      try{
+        const r = await fetch(url, { headers: { 'Accept': 'application/json' } });
+        return await r.json();
+      }catch{ return []; }
+    }
+
+    function renderSearch(results){
+      searchResults.innerHTML = '';
+      if(!results.length){ searchResults.innerHTML = '<li>لا نتائج</li>'; return; }
+      results.forEach(item => {
+        const li = document.createElement('li');
+        li.style.cursor='pointer';
+        li.textContent = item.display_name;
+        li.title = item.display_name;
+        li.addEventListener('click', () => {
+          const lat = parseFloat(item.lat), lon = parseFloat(item.lon);
+          map.flyTo([lat, lon], 13);
+          showToast('تم الانتقال إلى البحث');
+          updateHashDebounced();
+        });
+        searchResults.appendChild(li);
+      });
+    }
+
+    searchBtn.addEventListener('click', async () => {
+      const q = searchInput.value.trim();
+      renderSearch(await geocode(q));
+    });
+    searchInput.addEventListener('keydown', async (e) => {
+      if(e.key==='Enter'){ renderSearch(await geocode(searchInput.value.trim())); }
+    });
+
+    // ============ Permalink (حالة الخريطة في العنوان) ============
+    function getState(){
+      const c = map.getCenter();
+      const z = map.getZoom();
+      const s = [parseFloat(streetRange.value)||1, parseFloat(satelliteRange.value)||1];
+      const m = markers.map(m=>{ const p = m.getLatLng(); return [p.lat, p.lng]; });
+      return { c:[+c.lat.toFixed(6), +c.lng.toFixed(6), z], l: activeImageryKey, s, m };
+    }
+
+    let hashTimer = null;
+    function updateHashDebounced(){
+      clearTimeout(hashTimer);
+      hashTimer = setTimeout(()=>{ location.hash = encodeURIComponent(JSON.stringify(getState())); }, 350);
+    }
+
+    function applyStateFromHash(){
+      if(!location.hash || location.hash.length<2) return;
+      try{
+        const obj = JSON.parse(decodeURIComponent(location.hash.substring(1)));
+        if(obj.c){ map.setView([obj.c[0], obj.c[1]], obj.c[2]||6); }
+        if(obj.l && imageryLayers[obj.l] !== undefined){
+          satelliteSelect.value = obj.l;
+          satelliteSelect.dispatchEvent(new Event('change'));
+        }
+        if(Array.isArray(obj.s)){
+          streetRange.value = obj.s[0]; streetValue.textContent=obj.s[0]; streetLayer.setOpacity(parseFloat(obj.s[0]));
+          satelliteRange.value = obj.s[1]; satelliteValue.textContent=obj.s[1];
+          if (imageryLayers[activeImageryKey]) imageryLayers[activeImageryKey].setOpacity(parseFloat(obj.s[1]));
+        }
+        if(Array.isArray(obj.m)){
+          markersGroup.clearLayers(); markers.length=0; if(distanceLine){ markersGroup.removeLayer(distanceLine); distanceLine=null; }
+          obj.m.slice(0,2).forEach(([lat,lng])=>{
+            const marker = L.marker([lat,lng], { draggable:true }).addTo(markersGroup);
+            markers.push(marker);
+            marker.on('dragend', updateHashDebounced);
+          });
+          if(markers.length===2){ computeDistance(); }
+        }
+      }catch{ /* تجاهل أي خطأ */ }
+    }
+
+    map.on('moveend zoomend', updateHashDebounced);
+    satelliteSelect.addEventListener('change', updateHashDebounced);
+    streetRange.addEventListener('input', updateHashDebounced);
+    satelliteRange.addEventListener('input', updateHashDebounced);
+    markersGroup.on('layeradd', updateHashDebounced);
+    markersGroup.on('layerremove', updateHashDebounced);
+
+    applyStateFromHash();
+
+    // فallback تلقائي إذا فشلت البلاطات
+    ;[esriImagery, arcgisImagery].forEach(l => {
+      l.on('tileerror', () => {
+        showToast('تعذّر تحميل الصور الجوية — تم الإبقاء على خريطة الشارع');
+        satelliteSelect.value = 'none';
+        if (imageryLayers[activeImageryKey]) {
+          imageryLayers[activeImageryKey].remove();
+          activeImageryKey = 'none';
+        }
+        updateHashDebounced();
+      });
+    });
+
+    // تلميحات لوحة المفاتيح الأساسية للوصولية
+    document.addEventListener('keydown', (ev) => {
+      if (ev.key === 'c' && (ev.ctrlKey || ev.metaKey)) {
+        if (coordsInput.value) navigator.clipboard.writeText(coordsInput.value).then(() => showToast('تم نسخ الإحداثيات'));
+      }
+    });
+  </script>
+</body>
+</html>
