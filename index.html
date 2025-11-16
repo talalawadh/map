@@ -97,6 +97,7 @@
           <option value="none" selected>بدون صور جوية (OSM فقط)</option>
           <option value="esri">Esri World Imagery</option>
           <option value="imagerie">ArcGIS Imagerie</option>
+          <option value="google">صور قوقل (ساتلايت)</option>
         </select>
         <div class="hint">يمكنك التبديل فورًا بين طبقات الصور دون التأثير على بقية العناصر.</div>
       </div>
@@ -171,7 +172,23 @@
       { attribution: '&copy; Esri, USGS, NASA', opacity: 0, maxZoom: 19 }
     );
 
-    const imageryLayers = { none: null, esri: esriImagery, imagerie: arcgisImagery };
+    // طبقة صور الأقمار الصناعية من قوقل
+    const googleImagery = L.tileLayer(
+      'https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+      {
+        subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+        attribution: '&copy; <a href="https://www.google.com/earth/">Google Earth</a>',
+        opacity: 0,
+        maxZoom: 19
+      }
+    );
+
+    const imageryLayers = {
+      none: null,
+      esri: esriImagery,
+      imagerie: arcgisImagery,
+      google: googleImagery
+    };
     let activeImageryKey = 'none';
 
     // عناصر مساعدة
@@ -478,7 +495,7 @@
     applyStateFromHash();
 
     // فallback تلقائي إذا فشلت البلاطات
-    ;[esriImagery, arcgisImagery].forEach(l => {
+    ;[esriImagery, arcgisImagery, googleImagery].forEach(l => {
       l.on('tileerror', () => {
         showToast('تعذّر تحميل الصور الجوية — تم الإبقاء على خريطة الشارع');
         satelliteSelect.value = 'none';
